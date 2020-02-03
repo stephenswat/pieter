@@ -12,6 +12,7 @@ use super::direction::Direction;
 type ProtoProgram = HashMap<MachineNode, MachineNode>;
 
 struct Block {
+    id: u32,
     colour: Colour,
     pixels: Vec<(u32, u32)>
 }
@@ -19,7 +20,7 @@ struct Block {
 fn parse_block_change(a: Block, b:Block) -> Operation {
     match (a, b) {
         (
-            Block { colour: Colour::Colour { hue: h1, lightness: l1 }, pixels: p }, 
+            Block { colour: Colour::Colour { hue: h1, lightness: l1 }, pixels: p, .. }, 
             Block { colour: Colour::Colour { hue: h2, lightness: l2 }, .. }
         ) => {
             let dh = (h2 - h1) % 6;
