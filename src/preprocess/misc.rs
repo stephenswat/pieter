@@ -5,7 +5,7 @@ use image::{ImageBuffer, Rgb, Rgba};
 use crate::machine::{Operation, Program};
 
 use super::chooser::Chooser;
-use super::colour::{Colour, parse_colour};
+use super::colour::Colour;
 use super::machinenode::MachineNode;
 use super::direction::Direction;
 
@@ -126,7 +126,7 @@ fn block_colours(i: &ImageBuffer<Rgba<u32>, Vec<u32>>) -> HashMap<u32, Colour> {
     let mut map = HashMap::new();
 
     for (_, _, Rgba([r, g, b, id])) in i.enumerate_pixels() {
-        map.insert(*id, parse_colour(Rgb([*r, *g, *b])));
+        map.insert(*id, Colour::from_rgb(Rgb([*r, *g, *b])));
     }
 
     map
