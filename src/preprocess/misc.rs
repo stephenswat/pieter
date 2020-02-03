@@ -2,124 +2,20 @@ use std::collections::{HashMap};
 
 use image::{ImageBuffer, Rgb, Rgba};
 
-use super::machine::{Operation, Program};
+use crate::machine::{Operation, Program};
+
+use super::chooser::Chooser;
+use super::colour::{Colour, parse_colour};
+use super::machinenode::MachineNode;
+use super::direction::Direction;
 
 type ProtoProgram = HashMap<MachineNode, MachineNode>;
-
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
-pub enum Direction {
-    Up,
-    Down,
-    Left,
-    Right
-}
-
-impl Direction {
-    pub fn rotate(&self, r: Chooser) -> Direction {
-        match (self, r) {
-            (Direction::Up,    Chooser::Left)  => Direction::Left,
-            (Direction::Up,    Chooser::Right) => Direction::Right,
-            (Direction::Left,  Chooser::Left)  => Direction::Down,
-            (Direction::Left,  Chooser::Right) => Direction::Up,
-            (Direction::Down,  Chooser::Left)  => Direction::Right,
-            (Direction::Down,  Chooser::Right) => Direction::Left,
-            (Direction::Right, Chooser::Left)  => Direction::Up,
-            (Direction::Right, Chooser::Right) => Direction::Down
-        }
-    }
-    
-    pub fn clockwise(&self) -> Direction {
-        self.rotate(Chooser::Right)
-    }
-}
-
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
-pub enum Chooser {
-    Left,
-    Right
-}
-
-impl Chooser {
-    pub fn flip(&self) -> Chooser {
-        match self {
-            Chooser::Left  => Chooser::Right,
-            Chooser::Right => Chooser::Left
-        }
-    }
-}
-
-#[derive(Hash, Eq, PartialEq, Debug)]
-pub struct MachineNode {
-    pub block: u32, 
-    pub direction: Direction, 
-    pub chooser: Chooser, 
-    pub flipped: bool
-}
-
-impl MachineNode {
-    pub fn redirect(&self) -> MachineNode {
-        if self.flipped {
-            MachineNode {
-                block: self.block, 
-                direction: self.direction.clockwise(), 
-                chooser: self.chooser, 
-                flipped: false
-            }
-        } else {
-            MachineNode { 
-                block: self.block, 
-                direction: self.direction, 
-                chooser: self.chooser.flip(), 
-                flipped: true
-            }
-        }
-    }
-}
-
-#[derive(Debug)]
-enum Colour {
-    Colour { hue: u8, lightness: u8 },
-    Black,
-    White,
-    Other
-}
 
 struct Block {
     colour: Colour,
     size: u32
 }
 
-fn parse_colour(Rgb(c): Rgb<u32>) -> Colour {
-    match c {
-        [255, 192, 192] => Colour::Colour { hue: 0, lightness: 0 },
-        [255,   0,   0] => Colour::Colour { hue: 0, lightness: 1 },
-        [192,   0,   0] => Colour::Colour { hue: 0, lightness: 2 },
-
-        [255, 255, 192] => Colour::Colour { hue: 1, lightness: 0 },
-        [255, 255,   0] => Colour::Colour { hue: 1, lightness: 1 },
-        [192, 192,   0] => Colour::Colour { hue: 1, lightness: 2 },
-
-        [192, 255, 192] => Colour::Colour { hue: 2, lightness: 0 },
-        [  0, 255,   0] => Colour::Colour { hue: 2, lightness: 1 },
-        [  0, 192,   0] => Colour::Colour { hue: 2, lightness: 2 },
-
-        [192, 255, 255] => Colour::Colour { hue: 3, lightness: 0 },
-        [  0, 255, 255] => Colour::Colour { hue: 3, lightness: 1 },
-        [  0, 192, 192] => Colour::Colour { hue: 3, lightness: 2 },
-
-        [192, 192, 255] => Colour::Colour { hue: 4, lightness: 0 },
-        [  0,   0, 255] => Colour::Colour { hue: 4, lightness: 1 },
-        [  0,   0, 192] => Colour::Colour { hue: 4, lightness: 2 },
-
-        [255, 192, 255] => Colour::Colour { hue: 5, lightness: 0 },
-        [255,   0, 255] => Colour::Colour { hue: 5, lightness: 1 },
-        [192,   0, 192] => Colour::Colour { hue: 5, lightness: 2 },
-
-        [  0,   0,   0] => Colour::Black,
-        [255, 255, 255] => Colour::White,
-        _               => Colour::Other
-    }
-}
 
 fn parse_block_change(a: Block, b:Block) -> Operation {
     match (a, b) {
@@ -368,7 +264,7 @@ fn resolve_black_blocks(cm: &HashMap<u32, Colour>, tm: &ProtoProgram) -> ProtoPr
     ret
 }
 
-fn read_protoprogram(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> ProtoProgram {
+pub fn read_protoprogram(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> ProtoProgram {
     let annotated = identify_blocks(i);
     let colour_map = block_colours(&annotated);
     let trans_map = block_transitions(&annotated);
@@ -376,7 +272,7 @@ fn read_protoprogram(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> ProtoProgram {
     trans_map
 }
 
-fn proto_to_program(p: ProtoProgram) -> Program {
+pub fn proto_to_program(p: ProtoProgram) -> Program {
     Program::new(0, HashMap::new())
 }
 
