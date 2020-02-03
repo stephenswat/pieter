@@ -13,22 +13,21 @@ type ProtoProgram = HashMap<MachineNode, MachineNode>;
 
 struct Block {
     colour: Colour,
-    size: u32
+    pixels: Vec<(u32, u32)>
 }
-
 
 fn parse_block_change(a: Block, b:Block) -> Operation {
     match (a, b) {
         (
-            Block { colour: Colour::Colour { hue: h1, lightness: l1 }, size: s }, 
-            Block { colour: Colour::Colour { hue: h2, lightness: l2 }, size: _ }
+            Block { colour: Colour::Colour { hue: h1, lightness: l1 }, pixels: p }, 
+            Block { colour: Colour::Colour { hue: h2, lightness: l2 }, .. }
         ) => {
             let dh = (h2 - h1) % 6;
             let dl = (l2 - l1) % 3;
 
             match (dh, dl) {
                 (0, 0) => Operation::NoOp,
-                (0, 1) => Operation::Push(s as i64),
+                (0, 1) => Operation::Push(p.len() as i64),
                 (0, 2) => Operation::Pop,
 
                 (1, 0) => Operation::Add,
@@ -58,16 +57,16 @@ fn parse_block_change(a: Block, b:Block) -> Operation {
             }
         }
 
-        (Block { colour: Colour::Other, size: _ }, _) | 
-        (_, Block { colour: Colour::Other, size: _ }) => Operation::Error(
+        (Block { colour: Colour::Other, .. }, _) | 
+        (_, Block { colour: Colour::Other, .. }) => Operation::Error(
             "Entering a block with non-standard colour is disallowed!"
         ),
 
-        (Block { colour: Colour::White, size: _ }, _) | 
-        (_, Block { colour: Colour::White, size: _ }) => Operation::NoOp,
+        (Block { colour: Colour::White, .. }, _) | 
+        (_, Block { colour: Colour::White, .. }) => Operation::NoOp,
 
-        (Block { colour: Colour::Black, size: _ }, _) | 
-        (_, Block { colour: Colour::Black, size: _ }) => panic!(
+        (Block { colour: Colour::Black, .. }, _) | 
+        (_, Block { colour: Colour::Black, .. }) => panic!(
             "Somehow, we entered a black block. That is invalid."
         )
     }
