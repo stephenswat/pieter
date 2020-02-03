@@ -22,54 +22,31 @@ pub enum Operation {
     Error(&'static str)
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
-pub enum Direction {
-    Up,
-    Down,
-    Left,
-    Right
+pub struct Program {
+    initial_state: u64,
+    transitions: HashMap<u64, (u64, Operation)>
 }
 
-impl Direction {
-    pub fn rotate(&self, r: Chooser) -> Direction {
-        match (self, r) {
-            (Direction::Up,    Chooser::Left)  => Direction::Left,
-            (Direction::Up,    Chooser::Right) => Direction::Right,
-            (Direction::Left,  Chooser::Left)  => Direction::Down,
-            (Direction::Left,  Chooser::Right) => Direction::Up,
-            (Direction::Down,  Chooser::Left)  => Direction::Right,
-            (Direction::Down,  Chooser::Right) => Direction::Left,
-            (Direction::Right, Chooser::Left)  => Direction::Up,
-            (Direction::Right, Chooser::Right) => Direction::Down
+impl Program {
+    pub fn new(i: u64, t: HashMap<u64, (u64, Operation)>) -> Program {
+        Program {
+            initial_state: i,
+            transitions: t
         }
     }
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
-pub enum Chooser {
-    Left,
-    Right
-}
-
-pub type MachineNode = (u32, Direction, Chooser);
-
-pub type Program = HashMap<MachineNode, (MachineNode, Operation)>;
-
 pub struct Machine {
-    block: u32,
     stack: Vec<i64>,
-    direction: Direction,
-    chooser: Chooser,
+    state: u64,
     program: Program
 }
 
 impl Machine {
     pub fn new(p: Program) -> Machine {
         Machine { 
-            block: 1, 
             stack: Vec::new(), 
-            direction: Direction::Right,
-            chooser: Chooser::Left,
+            state: p.initial_state,
             program: p
         }
     }

@@ -2,7 +2,79 @@ use std::collections::{HashMap};
 
 use image::{ImageBuffer, Rgb, Rgba};
 
-use super::machine::{Operation, Program, Direction, Chooser, MachineNode};
+use super::machine::{Operation, Program};
+
+type ProtoProgram = HashMap<MachineNode, MachineNode>;
+
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
+pub enum Direction {
+    Up,
+    Down,
+    Left,
+    Right
+}
+
+impl Direction {
+    pub fn rotate(&self, r: Chooser) -> Direction {
+        match (self, r) {
+            (Direction::Up,    Chooser::Left)  => Direction::Left,
+            (Direction::Up,    Chooser::Right) => Direction::Right,
+            (Direction::Left,  Chooser::Left)  => Direction::Down,
+            (Direction::Left,  Chooser::Right) => Direction::Up,
+            (Direction::Down,  Chooser::Left)  => Direction::Right,
+            (Direction::Down,  Chooser::Right) => Direction::Left,
+            (Direction::Right, Chooser::Left)  => Direction::Up,
+            (Direction::Right, Chooser::Right) => Direction::Down
+        }
+    }
+    
+    pub fn clockwise(&self) -> Direction {
+        self.rotate(Chooser::Right)
+    }
+}
+
+#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
+pub enum Chooser {
+    Left,
+    Right
+}
+
+impl Chooser {
+    pub fn flip(&self) -> Chooser {
+        match self {
+            Chooser::Left  => Chooser::Right,
+            Chooser::Right => Chooser::Left
+        }
+    }
+}
+
+#[derive(Hash, Eq, PartialEq, Debug)]
+pub struct MachineNode {
+    pub block: u32, 
+    pub direction: Direction, 
+    pub chooser: Chooser, 
+    pub flipped: bool
+}
+
+impl MachineNode {
+    pub fn redirect(&self) -> MachineNode {
+        if self.flipped {
+            MachineNode {
+                block: self.block, 
+                direction: self.direction.clockwise(), 
+                chooser: self.chooser, 
+                flipped: false
+            }
+        } else {
+            MachineNode { 
+                block: self.block, 
+                direction: self.direction, 
+                chooser: self.chooser.flip(), 
+                flipped: true
+            }
+        }
+    }
+}
 
 #[derive(Debug)]
 enum Colour {
@@ -185,7 +257,7 @@ fn maximal_codels(i: &Vec<(u32, u32)>, d: Direction) -> Vec<(u32, u32)> {
     }
 }
 
-fn block_transitions(i: &ImageBuffer<Rgba<u32>, Vec<u32>>) -> HashMap<MachineNode, MachineNode> {
+fn block_transitions(i: &ImageBuffer<Rgba<u32>, Vec<u32>>) -> ProtoProgram {
     let mut blocks = HashMap::<u32, Vec<(u32, u32)>>::new();
     let mut ret = HashMap::new();
 
@@ -204,15 +276,79 @@ fn block_transitions(i: &ImageBuffer<Rgba<u32>, Vec<u32>>) -> HashMap<MachineNod
             let filter1 = maximal_codels(codels, *direction);
 
             for chooser in &[Chooser::Left, Chooser::Right] {
-                let snd_dir = direction.rotate(*chooser);
-                let filter2 = maximal_codels(&filter1, snd_dir);
-
-                assert_eq!(filter2.len(), 1);
-                let codel = filter2[0];
-
-                println!("{:?} {:?} {:?}", direction, snd_dir, codel);
-
-                ret.insert((*id, *direction, *chooser), (*id, *direction, *chooser));
+                let filter2 = maximal_codels(&filter1, direction.rotate(*chooser));
+                
+                for flipped in &[true, false] {
+                    assert_eq!(filter2.len(), 1);
+                    let (cx, cy) = filter2[0];
+                    let state = MachineNode {
+                        block: *id,
+                        direction: *direction,
+                        chooser: *chooser,
+                        flipped: *flipped
+                    };
+                    
+                    let new_state = match direction {
+                        // TODO: This code is in dire need of some deduplication!
+                        Direction::Up => {
+                            if cy == 0 {
+                                state.redirect()
+                            } else {
+                                let Rgba([_, _, _, new_id]) = i.get_pixel(cx, cy - 1);
+                                MachineNode {
+                                    block: *new_id,
+                                    direction: state.direction,
+                                    chooser: state.chooser,
+                                    flipped: false
+                                }
+                            }
+                        }
+                        
+                        Direction::Down => {
+                            if cy == i.height() - 1 {
+                                state.redirect()
+                            } else {
+                                let Rgba([_, _, _, new_id]) = i.get_pixel(cx, cy + 1);
+                                MachineNode {
+                                    block: *new_id,
+                                    direction: state.direction,
+                                    chooser: state.chooser,
+                                    flipped: false
+                                }
+                            }
+                        }
+                        
+                        Direction::Left => {
+                            if cx == 0 {
+                                state.redirect()
+                            } else {
+                                let Rgba([_, _, _, new_id]) = i.get_pixel(cx - 1, cy);
+                                MachineNode {
+                                    block: *new_id,
+                                    direction: state.direction,
+                                    chooser: state.chooser,
+                                    flipped: false
+                                }
+                            }
+                        }
+                        
+                        Direction::Right => {
+                            if cx == i.width() - 1 {
+                                state.redirect()
+                            } else {
+                                let Rgba([_, _, _, new_id]) = i.get_pixel(cx + 1, cy);
+                                MachineNode {
+                                    block: *new_id,
+                                    direction: state.direction,
+                                    chooser: state.chooser,
+                                    flipped: false
+                                }
+                            }
+                        }
+                    };
+                    
+                    ret.insert(state, new_state);
+                }
             }
         }
     }
@@ -220,23 +356,36 @@ fn block_transitions(i: &ImageBuffer<Rgba<u32>, Vec<u32>>) -> HashMap<MachineNod
     ret
 }
 
-pub fn read_program(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> Program {
+fn resolve_black_blocks(cm: &HashMap<u32, Colour>, tm: &ProtoProgram) -> ProtoProgram {
+    let mut ret = HashMap::new();
+    
+    // for ((oi, od, oc, of), (ni, nd, nc, nf)) in tm.iter() {
+    //     match cm.get(i) {
+    //         Some(Colour::Black) => ret.insert((oi, od, oc, of), ())
+    //     }
+    // }
+    
+    ret
+}
+
+fn read_protoprogram(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> ProtoProgram {
     let annotated = identify_blocks(i);
-
-    for (x, y, pixel) in annotated.enumerate_pixels() {
-        println!("{:?} {:?} {:?}", x, y, pixel);
-    }
-
     let colour_map = block_colours(&annotated);
     let trans_map = block_transitions(&annotated);
+    
+    trans_map
+}
 
-    for (key, value) in &colour_map {
+fn proto_to_program(p: ProtoProgram) -> Program {
+    Program::new(0, HashMap::new())
+}
+
+pub fn read_program(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> Program {
+    let proto = read_protoprogram(i);
+    
+    for (key, value) in &proto {
         println!("{:?}: {:?}", key, value);
     }
 
-    for (key, value) in &trans_map {
-        println!("{:?}: {:?}", key, value);
-    }
-
-    Program::new()
+    proto_to_program(proto)
 }
