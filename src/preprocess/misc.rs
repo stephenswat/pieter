@@ -36,7 +36,7 @@ impl ProtoProgram {
         let mut ret = HashMap::new();
         
         for (k, v) in self.0.iter() {
-            let mut reachable = false;
+            let mut reachable = k.is_root();
             
             for (_, t) in self.0.iter() {
                 if k == t {

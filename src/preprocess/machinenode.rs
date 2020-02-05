@@ -28,4 +28,13 @@ impl MachineNode {
             }
         }
     }
+    
+    pub fn is_root(&self) -> bool {
+        (
+            self.block.id == 0 && 
+            self.direction == Direction::Right &&
+            self.chooser == Chooser::Left &&
+            !self.flipped
+        )
+    }
 }
