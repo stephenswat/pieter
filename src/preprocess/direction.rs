@@ -1,6 +1,6 @@
 use super::chooser::Chooser;
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
+#[derive(Hash, Eq, PartialEq, Clone, Debug, Copy)]
 pub enum Direction {
     Up,
     Down,

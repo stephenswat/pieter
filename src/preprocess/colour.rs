@@ -1,6 +1,6 @@
 use image::Rgb;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub enum Colour {
     Colour { hue: u8, lightness: u8 },
     Black,

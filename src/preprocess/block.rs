@@ -1,7 +1,7 @@
 use super::colour::Colour;
 use crate::machine::Operation;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Eq, PartialEq, Hash)]
 pub struct Block {
     pub id: usize,
     pub colour: Colour,

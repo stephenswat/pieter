@@ -46,7 +46,7 @@ impl ProtoProgram {
             }
             
             if reachable {
-                ret.insert(*k, *v);
+                ret.insert(k.clone(), v.clone());
             }
         }
         
@@ -58,9 +58,9 @@ impl ProtoProgram {
         
         for (k, v) in self.0.iter() {
             if k.block == v.block {
-                ret.insert(*k, *self.0.get(v).unwrap());
+                ret.insert(k.clone(), self.0.get(v).unwrap().clone());
             } else {
-                ret.insert(*k, *v);
+                ret.insert(k.clone(), v.clone());
             }
         }
         
@@ -106,9 +106,9 @@ impl PietImage {
     fn to_protoprogram(&self) -> ProtoProgram {
         let mut ret = HashMap::new();
 
-        for Block { id, pixels: codels, .. } in self.blocks.iter() {
+        for b in self.blocks.iter() {
             for direction in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
-                let filter1 = maximal_codels(codels, *direction);
+                let filter1 = maximal_codels(&b.pixels, *direction);
 
                 for chooser in &[Chooser::Left, Chooser::Right] {
                     let filter2 = maximal_codels(&filter1, direction.rotate(*chooser));
@@ -117,7 +117,7 @@ impl PietImage {
                     
                     for flipped in &[true, false] {
                         let state = MachineNode {
-                            block: *id,
+                            block: b.clone(),
                             direction: *direction,
                             chooser: *chooser,
                             flipped: *flipped
@@ -135,8 +135,8 @@ impl PietImage {
                         let new_block = new_coordinate.and_then(|p| self.block_by_pixel(&p));
                         
                         let new_state = match new_block {
-                            Some(Block { id: new_id, .. }) => MachineNode {
-                                block: *new_id,
+                            Some(n) => MachineNode {
+                                block: n.clone(),
                                 direction: state.direction,
                                 chooser: state.chooser,
                                 flipped: false
@@ -231,13 +231,14 @@ pub fn read_program(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> Program {
         println!("{:?}: {:?}", key, value);
     }
     
+    println!("Number of elements: {}", proto.0.len());
     let q = proto.optimize();
     println!("Number of elements: {}", q.0.len());
     
     
-    for (key, value) in &q.0 {
-        println!("{:?}: {:?}", key, value);
-    }
+    // for (key, value) in &q.0 {
+    //     println!("{:?}: {:?}", key, value);
+    // }
     
     proto.to_program()
 }
