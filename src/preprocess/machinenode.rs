@@ -1,7 +1,7 @@
 use super::direction::Direction;
 use super::chooser::Chooser;
 
-#[derive(Hash, Eq, PartialEq, Debug)]
+#[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
 pub struct MachineNode {
     pub block: usize, 
     pub direction: Direction, 

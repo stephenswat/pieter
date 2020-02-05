@@ -9,7 +9,63 @@ use super::colour::Colour;
 use super::machinenode::MachineNode;
 use super::direction::Direction;
 
-type ProtoProgram = HashMap<MachineNode, MachineNode>;
+#[derive(Clone)]
+struct ProtoProgram(HashMap<MachineNode, MachineNode>);
+
+impl ProtoProgram {
+    fn to_program(&self) -> Program {
+        Program::new(0, HashMap::new())
+    }
+    
+    fn optimize(&self) -> ProtoProgram {
+        let new = self.opt_all();
+
+        if new.0.len() == self.0.len() {
+            (*self).clone()
+        } else {
+            new.optimize()
+        }
+    }
+    
+    fn opt_all(&self) -> ProtoProgram {
+        self.opt_remove_noops().opt_remove_unreachable()
+    }
+    
+    fn opt_remove_unreachable(&self) -> ProtoProgram {
+        let mut ret = HashMap::new();
+        
+        for (k, v) in self.0.iter() {
+            let mut reachable = false;
+            
+            for (_, t) in self.0.iter() {
+                if k == t {
+                    reachable = true;
+                    break;
+                }
+            }
+            
+            if reachable {
+                ret.insert(*k, *v);
+            }
+        }
+        
+        ProtoProgram(ret)
+    }
+    
+    fn opt_remove_noops(&self) -> ProtoProgram {
+        let mut ret = HashMap::new();
+        
+        for (k, v) in self.0.iter() {
+            if k.block == v.block {
+                ret.insert(*k, *self.0.get(v).unwrap());
+            } else {
+                ret.insert(*k, *v);
+            }
+        }
+        
+        ProtoProgram(ret)
+    }
+}
 
 #[derive(Clone, Debug)]
 struct Block {
@@ -51,6 +107,56 @@ impl PietImage {
     
     fn block_by_pixel(&self, p: &(u32, u32)) -> Option<&Block> {
         self.pixel_to_index.get(p).map(|i| &self.blocks[*i])
+    }
+    
+    fn to_protoprogram(&self) -> ProtoProgram {
+        let mut ret = HashMap::new();
+
+        for Block { id, pixels: codels, .. } in self.blocks.iter() {
+            for direction in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
+                let filter1 = maximal_codels(codels, *direction);
+
+                for chooser in &[Chooser::Left, Chooser::Right] {
+                    let filter2 = maximal_codels(&filter1, direction.rotate(*chooser));
+                    assert_eq!(filter2.len(), 1);
+                    let (cx, cy) = filter2[0];
+                    
+                    for flipped in &[true, false] {
+                        let state = MachineNode {
+                            block: *id,
+                            direction: *direction,
+                            chooser: *chooser,
+                            flipped: *flipped
+                        };
+                        
+                        let new_coordinate = match (cx, cy, direction) {
+                            (_, 0, Direction::Up)    => None,
+                            (_, _, Direction::Up)    => Some((cx, cy - 1)),
+                            (_, _, Direction::Down)  => Some((cx, cy + 1)),
+                            (0, _, Direction::Left)  => None,
+                            (_, _, Direction::Left)  => Some((cx - 1, cy)),
+                            (_, _, Direction::Right) => Some((cx + 1, cy))
+                        };
+                        
+                        let new_block = new_coordinate.and_then(|p| self.block_by_pixel(&p));
+                        
+                        let new_state = match new_block {
+                            Some(Block { id: new_id, .. }) => MachineNode {
+                                block: *new_id,
+                                direction: state.direction,
+                                chooser: state.chooser,
+                                flipped: false
+                            },
+                            None => state.redirect()
+                        };
+                        
+                        ret.insert(state, new_state);
+                    }
+                }
+            }
+        }
+        
+        ProtoProgram(ret)
     }
 }
 
@@ -180,72 +286,20 @@ fn maximal_codels(i: &Vec<(u32, u32)>, d: Direction) -> Vec<(u32, u32)> {
     }
 }
 
-fn blocks_to_proto(i: &PietImage) -> ProtoProgram {
-    let mut ret = HashMap::new();
-
-    for Block { id, pixels: codels, .. } in i.blocks.iter() {
-        for direction in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
-            let filter1 = maximal_codels(codels, *direction);
-
-            for chooser in &[Chooser::Left, Chooser::Right] {
-                let filter2 = maximal_codels(&filter1, direction.rotate(*chooser));
-                assert_eq!(filter2.len(), 1);
-                let (cx, cy) = filter2[0];
-                
-                for flipped in &[true, false] {
-                    let state = MachineNode {
-                        block: *id,
-                        direction: *direction,
-                        chooser: *chooser,
-                        flipped: *flipped
-                    };
-                    
-                    let new_coordinate = match (cx, cy, direction) {
-                        (_, 0, Direction::Up)    => None,
-                        (_, _, Direction::Up)    => Some((cx, cy - 1)),
-                        (_, _, Direction::Down)  => Some((cx, cy + 1)),
-                        (0, _, Direction::Left)  => None,
-                        (_, _, Direction::Left)  => Some((cx + 1, cy)),
-                        (_, _, Direction::Right) => Some((cx, cy + 1))
-                    };
-                    
-                    let new_block = new_coordinate.and_then(|p| i.block_by_pixel(&p));
-                    
-                    let new_state = match new_block {
-                        Some(Block { id: new_id, .. }) => MachineNode {
-                            block: *new_id,
-                            direction: state.direction,
-                            chooser: state.chooser,
-                            flipped: false
-                        },
-                        None => state.redirect()
-                    };
-                    
-                    ret.insert(state, new_state);
-                }
-            }
-        }
-    }
-    
-    ret
-}
-
-fn proto_to_program(p: &ProtoProgram) -> Program {
-    Program::new(0, HashMap::new())
-}
-
 pub fn read_program(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> Program {
-    let blocks = identify_blocks(i);
+    let proto = identify_blocks(i).to_protoprogram();
     
-    for b in blocks.blocks.iter() {
-        println!("{:?}", b);
-    }
-    
-    let proto = blocks_to_proto(&blocks);
-    
-    for (key, value) in &proto {
+    for (key, value) in &proto.0 {
         println!("{:?}: {:?}", key, value);
     }
-
-    proto_to_program(&proto)
+    
+    let q = proto.optimize();
+    println!("Number of elements: {}", q.0.len());
+    
+    
+    for (key, value) in &q.0 {
+        println!("{:?}: {:?}", key, value);
+    }
+    
+    proto.to_program()
 }
