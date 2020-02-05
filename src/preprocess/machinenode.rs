@@ -1,5 +1,6 @@
 use super::direction::Direction;
 use super::chooser::Chooser;
+use super::block::Block;
 
 #[derive(Hash, Eq, PartialEq, Debug, Clone, Copy)]
 pub struct MachineNode {

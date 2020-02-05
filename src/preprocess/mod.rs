@@ -1,4 +1,5 @@
 mod misc;
+mod block;
 mod colour;
 mod chooser;
 mod machinenode;
