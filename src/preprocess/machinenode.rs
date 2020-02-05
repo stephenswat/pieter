@@ -3,7 +3,7 @@ use super::chooser::Chooser;
 
 #[derive(Hash, Eq, PartialEq, Debug)]
 pub struct MachineNode {
-    pub block: u32, 
+    pub block: usize, 
     pub direction: Direction, 
     pub chooser: Chooser, 
     pub flipped: bool

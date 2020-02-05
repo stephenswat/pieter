@@ -1,6 +1,6 @@
 use image::Rgb;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Colour {
     Colour { hue: u8, lightness: u8 },
     Black,
@@ -9,7 +9,7 @@ pub enum Colour {
 }
 
 impl Colour {
-    pub fn from_rgb(Rgb(c): Rgb<u32>) -> Colour {
+    pub fn from_rgb(Rgb(c): &Rgb<u8>) -> Colour {
         match c {
             [255, 192, 192] => Colour::Colour { hue: 0, lightness: 0 },
             [255,   0,   0] => Colour::Colour { hue: 0, lightness: 1 },

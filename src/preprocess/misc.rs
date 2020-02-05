@@ -1,6 +1,6 @@
-use std::collections::{HashMap};
+use std::collections::{HashMap, HashSet};
 
-use image::{ImageBuffer, Rgb, Rgba};
+use image::{ImageBuffer, Rgb};
 
 use crate::machine::{Operation, Program};
 
@@ -11,10 +11,47 @@ use super::direction::Direction;
 
 type ProtoProgram = HashMap<MachineNode, MachineNode>;
 
+#[derive(Clone, Debug)]
 struct Block {
-    id: u32,
+    id: usize,
     colour: Colour,
     pixels: Vec<(u32, u32)>
+}
+
+struct PietImage {
+    blocks: Vec<Block>,
+    pixel_to_index: HashMap<(u32, u32), usize>
+}
+
+impl PietImage {
+    fn new() -> PietImage {
+        PietImage {
+            blocks: Vec::new(),
+            pixel_to_index: HashMap::new()
+        }
+    }
+    
+    fn insert_block(&mut self, p: &Vec<(u32, u32)>, c: &Colour) {
+        let pos = self.blocks.len();
+                
+        self.blocks.push(Block {
+            id: self.blocks.len(),
+            colour: c.clone(),
+            pixels: p.clone()
+        });
+        
+        for q in p.iter() {
+            self.pixel_to_index.insert(*q, pos);
+        }
+    }
+    
+    fn contains_pixel(&self, p: &(u32, u32)) -> bool {
+        self.pixel_to_index.contains_key(&p)
+    }
+    
+    fn block_by_pixel(&self, p: &(u32, u32)) -> Option<&Block> {
+        self.pixel_to_index.get(p).map(|i| &self.blocks[*i])
+    }
 }
 
 fn parse_block_change(a: Block, b:Block) -> Operation {
@@ -73,63 +110,53 @@ fn parse_block_change(a: Block, b:Block) -> Operation {
     }
 }
 
-/*
- * Our first objective is to group codels together into blocks. We go from an
- * image in which the pixels are RGB values to an image in which each pixel is
- * an integer identifier, indicating to which block the codel belongs. We make
- * no guarantees about the values of these identifiers, only that each block
- * has a unique identifier, and that all codels in the same block have the same
- * identifier. We use Rgba-type pixels to represent these integer identifiers,
- * since we can use them to hold 4 values (R, G, B, block ID).
- */
-fn identify_blocks(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> ImageBuffer<Rgba<u32>, Vec<u32>> {
-    let zero = Rgba([0, 0, 0, 0]);
-
-    let mut block_id = 0;
-    let mut buf = ImageBuffer::from_pixel(i.width(), i.height(), zero);
+fn identify_blocks(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> PietImage {
+    let mut ret = PietImage::new();
 
     for (x, y, Rgb([r, g, b])) in i.enumerate_pixels() {
+        if ret.contains_pixel(&(x, y)) {
+            continue;
+        }
+        
         let mut stack = vec![(x, y)];
+        let mut pixels = Vec::new();
+        let mut visited = HashSet::new();
         let op = i.get_pixel(x, y);
+        let colour = Colour::from_rgb(op);
         
-        block_id += 1;
-        
-        while let Some((cx, cy)) = stack.pop() {
-            if *buf.get_pixel(cx, cy) != zero {
-                continue;
+        while let Some(p) = stack.pop() {
+            let (cx, cy) = p;
+            
+            if visited.contains(&p) {
+                continue
             }
-
-            *buf.get_pixel_mut(cx, cy) = Rgba([(*r) as u32, (*g) as u32, (*b) as u32, block_id]);
+            
+            pixels.push(p);
+            visited.insert(p);
 
             if cx > 0 && op == i.get_pixel(cx - 1, cy) {
                 stack.push((cx - 1, cy))
             }
-
+            
             if cx < i.width() - 1 && op == i.get_pixel(cx + 1, cy) {
                 stack.push((cx + 1, cy))
             }
-
+            
             if cy > 0 && op == i.get_pixel(cx, cy - 1) {
                 stack.push((cx, cy - 1))
             }
-
+            
             if cy < i.height() - 1 && op == i.get_pixel(cx, cy + 1) {
                 stack.push((cx, cy + 1))
             }
         }
+        
+        if pixels.len() > 0 {
+            ret.insert_block(&pixels, &colour)
+        }
     }
-
-    buf
-}
-
-fn block_colours(i: &ImageBuffer<Rgba<u32>, Vec<u32>>) -> HashMap<u32, Colour> {
-    let mut map = HashMap::new();
-
-    for (_, _, Rgba([r, g, b, id])) in i.enumerate_pixels() {
-        map.insert(*id, Colour::from_rgb(Rgb([*r, *g, *b])));
-    }
-
-    map
+    
+    ret
 }
 
 fn maximal_codels(i: &Vec<(u32, u32)>, d: Direction) -> Vec<(u32, u32)> {
@@ -153,30 +180,19 @@ fn maximal_codels(i: &Vec<(u32, u32)>, d: Direction) -> Vec<(u32, u32)> {
     }
 }
 
-fn block_transitions(i: &ImageBuffer<Rgba<u32>, Vec<u32>>) -> ProtoProgram {
-    let mut blocks = HashMap::<u32, Vec<(u32, u32)>>::new();
+fn blocks_to_proto(i: &PietImage) -> ProtoProgram {
     let mut ret = HashMap::new();
 
-    for (x, y, Rgba([_, _, _, id])) in i.enumerate_pixels() {
-        if let Some(v) = blocks.get_mut(id) {
-            v.push((x, y));
-        } else {
-            blocks.insert(*id, vec![(x, y)]);
-        }
-    }
-
-    for (id, codels) in blocks.iter() {
-        println!("{:?} - {:?}", id, codels);
-
+    for Block { id, pixels: codels, .. } in i.blocks.iter() {
         for direction in &[Direction::Up, Direction::Down, Direction::Left, Direction::Right] {
             let filter1 = maximal_codels(codels, *direction);
 
             for chooser in &[Chooser::Left, Chooser::Right] {
                 let filter2 = maximal_codels(&filter1, direction.rotate(*chooser));
+                assert_eq!(filter2.len(), 1);
+                let (cx, cy) = filter2[0];
                 
                 for flipped in &[true, false] {
-                    assert_eq!(filter2.len(), 1);
-                    let (cx, cy) = filter2[0];
                     let state = MachineNode {
                         block: *id,
                         direction: *direction,
@@ -184,63 +200,25 @@ fn block_transitions(i: &ImageBuffer<Rgba<u32>, Vec<u32>>) -> ProtoProgram {
                         flipped: *flipped
                     };
                     
-                    let new_state = match direction {
-                        // TODO: This code is in dire need of some deduplication!
-                        Direction::Up => {
-                            if cy == 0 {
-                                state.redirect()
-                            } else {
-                                let Rgba([_, _, _, new_id]) = i.get_pixel(cx, cy - 1);
-                                MachineNode {
-                                    block: *new_id,
-                                    direction: state.direction,
-                                    chooser: state.chooser,
-                                    flipped: false
-                                }
-                            }
-                        }
-                        
-                        Direction::Down => {
-                            if cy == i.height() - 1 {
-                                state.redirect()
-                            } else {
-                                let Rgba([_, _, _, new_id]) = i.get_pixel(cx, cy + 1);
-                                MachineNode {
-                                    block: *new_id,
-                                    direction: state.direction,
-                                    chooser: state.chooser,
-                                    flipped: false
-                                }
-                            }
-                        }
-                        
-                        Direction::Left => {
-                            if cx == 0 {
-                                state.redirect()
-                            } else {
-                                let Rgba([_, _, _, new_id]) = i.get_pixel(cx - 1, cy);
-                                MachineNode {
-                                    block: *new_id,
-                                    direction: state.direction,
-                                    chooser: state.chooser,
-                                    flipped: false
-                                }
-                            }
-                        }
-                        
-                        Direction::Right => {
-                            if cx == i.width() - 1 {
-                                state.redirect()
-                            } else {
-                                let Rgba([_, _, _, new_id]) = i.get_pixel(cx + 1, cy);
-                                MachineNode {
-                                    block: *new_id,
-                                    direction: state.direction,
-                                    chooser: state.chooser,
-                                    flipped: false
-                                }
-                            }
-                        }
+                    let new_coordinate = match (cx, cy, direction) {
+                        (_, 0, Direction::Up)    => None,
+                        (_, _, Direction::Up)    => Some((cx, cy - 1)),
+                        (_, _, Direction::Down)  => Some((cx, cy + 1)),
+                        (0, _, Direction::Left)  => None,
+                        (_, _, Direction::Left)  => Some((cx + 1, cy)),
+                        (_, _, Direction::Right) => Some((cx, cy + 1))
+                    };
+                    
+                    let new_block = new_coordinate.and_then(|p| i.block_by_pixel(&p));
+                    
+                    let new_state = match new_block {
+                        Some(Block { id: new_id, .. }) => MachineNode {
+                            block: *new_id,
+                            direction: state.direction,
+                            chooser: state.chooser,
+                            flipped: false
+                        },
+                        None => state.redirect()
                     };
                     
                     ret.insert(state, new_state);
@@ -252,36 +230,22 @@ fn block_transitions(i: &ImageBuffer<Rgba<u32>, Vec<u32>>) -> ProtoProgram {
     ret
 }
 
-fn resolve_black_blocks(cm: &HashMap<u32, Colour>, tm: &ProtoProgram) -> ProtoProgram {
-    let mut ret = HashMap::new();
-    
-    // for ((oi, od, oc, of), (ni, nd, nc, nf)) in tm.iter() {
-    //     match cm.get(i) {
-    //         Some(Colour::Black) => ret.insert((oi, od, oc, of), ())
-    //     }
-    // }
-    
-    ret
-}
-
-pub fn read_protoprogram(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> ProtoProgram {
-    let annotated = identify_blocks(i);
-    let colour_map = block_colours(&annotated);
-    let trans_map = block_transitions(&annotated);
-    
-    trans_map
-}
-
-pub fn proto_to_program(p: ProtoProgram) -> Program {
+fn proto_to_program(p: &ProtoProgram) -> Program {
     Program::new(0, HashMap::new())
 }
 
 pub fn read_program(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> Program {
-    let proto = read_protoprogram(i);
+    let blocks = identify_blocks(i);
+    
+    for b in blocks.blocks.iter() {
+        println!("{:?}", b);
+    }
+    
+    let proto = blocks_to_proto(&blocks);
     
     for (key, value) in &proto {
         println!("{:?}: {:?}", key, value);
     }
 
-    proto_to_program(proto)
+    proto_to_program(&proto)
 }
