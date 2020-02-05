@@ -1,12 +1,8 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 
-use crate::machine::{Operation, Program};
+use crate::machine::Program;
 
-use super::chooser::Chooser;
-use super::colour::Colour;
-use super::block::Block;
 use super::machinenode::MachineNode;
-use super::direction::Direction;
 
 #[derive(Clone)]
 pub struct ProtoProgram(pub HashMap<MachineNode, MachineNode>);

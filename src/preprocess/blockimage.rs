@@ -118,7 +118,7 @@ impl BlockImage {
     pub fn from_imagebuffer(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> BlockImage {
         let mut ret = BlockImage::new();
 
-        for (x, y, Rgb([r, g, b])) in i.enumerate_pixels() {
+        for (x, y, op) in i.enumerate_pixels() {
             if ret.contains_pixel(&(x, y)) {
                 continue;
             }
@@ -126,7 +126,6 @@ impl BlockImage {
             let mut stack = vec![(x, y)];
             let mut pixels = Vec::new();
             let mut visited = HashSet::new();
-            let op = i.get_pixel(x, y);
             let colour = Colour::from_rgb(op);
             
             while let Some(p) = stack.pop() {
