@@ -9,14 +9,14 @@ pub struct Block {
 }
 
 impl Block {
-    fn delta(&self, rhs: &Block) -> Operation {
+    pub fn delta(&self, rhs: &Block) -> Operation {
         match (self, rhs) {
             (
                 Block { colour: Colour::Colour { hue: h1, lightness: l1 }, pixels: p, .. }, 
                 Block { colour: Colour::Colour { hue: h2, lightness: l2 }, .. }
             ) => {
-                let dh = (h2 - h1) % 6;
-                let dl = (l2 - l1) % 3;
+                let dh = (h2 + 6 - h1) % 6;
+                let dl = (l2 + 3 - l1) % 3;
 
                 match (dh, dl) {
                     (0, 0) => Operation::NoOp,

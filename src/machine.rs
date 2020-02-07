@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+#[derive(Debug)]
 pub enum Operation {
     NoOp,
     Push(i64),
@@ -23,8 +24,8 @@ pub enum Operation {
 }
 
 pub struct Program {
-    initial_state: u64,
-    transitions: HashMap<u64, (u64, Operation)>
+    pub initial_state: u64,
+    pub transitions: HashMap<u64, (u64, Operation)>
 }
 
 impl Program {

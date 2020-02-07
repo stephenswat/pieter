@@ -9,7 +9,14 @@ pub struct ProtoProgram(pub HashMap<MachineNode, MachineNode>);
 
 impl ProtoProgram {
     pub fn to_program(&self) -> Program {
-        Program::new(0, HashMap::new())
+        let mut ret = HashMap::new();
+        
+        for (k, v) in &self.0 {
+            let (nk, nv) = k.delta(&v);
+            ret.insert(nk, nv);
+        }
+        
+        Program::new(0, ret)
     }
     
     pub fn optimize(&self) -> ProtoProgram {

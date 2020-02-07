@@ -22,10 +22,15 @@ pub fn read_program(i: ImageBuffer<Rgb<u8>, Vec<u8>>) -> Program {
     let q = proto.optimize();
     println!("Number of elements: {}", q.0.len());
     
+    for (key, value) in &q.0 {
+        println!("{:?}: {:?}", key, value);
+    }
     
-    // for (key, value) in &q.0 {
-    //     println!("{:?}: {:?}", key, value);
-    // }
+    let p = proto.to_program();
+
+    for (key, value) in &p.transitions {
+        println!("{:?}: {:?}", key, value);
+    }
     
-    proto.to_program()
+    p
 }
